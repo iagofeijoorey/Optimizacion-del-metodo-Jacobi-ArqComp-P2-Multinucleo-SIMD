@@ -8,7 +8,7 @@ Implementación y análisis de rendimiento del método iterativo de Jacobi en C,
 * `src/`: Contiene el código fuente de las cuatro versiones del algoritmo.
     - `v1.c`: Versión secuencial base
     - `v2.c`: Versión optimizada con la mejor combinación de las siguientes técnicas de caché
-    `v2_options/`: Contiene el código de las 4 variantes individuales de la versión 2 del código.
+    - `v2_options/`: Contiene el código de las 4 variantes individuales de la versión 2 del código.
         - `v2_1.c`: Versión optimizada con reducción del número total de instrucciones a ejecutar.
         - `v2_2.c`: Versión optimizada con división lazos.
         - `v2_3.c`: Versión optimizada con desenrollamiento de lazos.
