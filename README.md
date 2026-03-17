@@ -22,8 +22,8 @@ Implementación y análisis de rendimiento del método iterativo de Jacobi en C,
 
 ## Requisitos del Sistema
 * GCC con soporte para OpenMP y AVX2
-* Sistema Linux (recomendado: FinisTerrae III, CESGA)
-
+* Sistema Linux
+  
 ## Uso
 ```bash
 # Compilar todas las versiones
