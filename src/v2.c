@@ -15,7 +15,7 @@
 
 
 int n;
-int n_real;
+int tamanho_bloque;
 
 
 double resolver_jacobi(double **a, double *b, double *x);
@@ -28,7 +28,7 @@ void generar_vector(double *vector);
 int main(int argc, char *argv[])
 {
    int c = 1;
-   n_real = n - (n % tamanho_desenrollo); // Para gestionar el caso en el que n no es múltiplo de tamanho_desenrollo
+   tamanho_bloque = n - (n % tamanho_desenrollo); // Para gestionar el caso en el que n no es múltiplo de tamanho_desenrollo
 
 
    if (argc != 2 && argc != 3)
@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
 
 
    // Desenrollamos el lazo (5 en 5)
-   for (int i = 0; i < n_real; i += tamanho_desenrollo)
+   for (int i = 0; i < tamanho_bloque; i += tamanho_desenrollo)
    {
        a[i] = &data[i * n];
        a[i+1] = &data[(i+1) * n];
@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
 
 
    // Gestionamos el caso en el que n no es múltiplo de tamanho_desenrollo
-   for (int i = n_real; i < n; i++) a[i] = &data[i * n];
+   for (int i = tamanho_bloque; i < n; i++) a[i] = &data[i * n];
 
 
    /* Reserva de vectores */
@@ -123,7 +123,7 @@ double resolver_jacobi(double **a, double *b, double *x)
 
 
            // Desenrollamos el lazo (5 en 5)
-           for (int j = 0; j < n_real; j += tamanho_desenrollo)
+           for (int j = 0; j < tamanho_bloque; j += tamanho_desenrollo)
            {
                if (i != j) sigma += a[i][j] * x[j];
                if (i != (j+1)) sigma += a[i][j+1] * x[j+1];
@@ -134,16 +134,19 @@ double resolver_jacobi(double **a, double *b, double *x)
 
 
            // Gestionamos el caso en el que n no es múltiplo de tamanho_desenrollo
-           for (int j = n_real; j < n; j++) if (i != j) sigma += a[i][j] * x[j];
+           for (int j = tamanho_bloque; j < n; j++) if (i != j) sigma += a[i][j] * x[j];
 
 
            x_new[i] = (b[i] - sigma) / a[i][i];
-           norm2 += pow(x_new[i] - x[i], 2);
+           // Cambiamos el pow de la version 1 por esta multiplicacion, evitando así llamar a pow, lo que puede
+           //  reducir el número de instrucciones y mejorar el rendimiento
+           double diff = x_new[i] - x[i];
+           norm2 += diff * diff;
        }
       
        /* copiar nuevo vector */
        // Desenrollamos el lazo (5 en 5)
-       for (int i = 0; i < n_real; i += tamanho_desenrollo)
+       for (int i = 0; i < tamanho_bloque; i += tamanho_desenrollo)
        {
            x[i] = x_new[i];
            x[i+1] = x_new[i+1];
@@ -153,9 +156,9 @@ double resolver_jacobi(double **a, double *b, double *x)
        }
       
        // Gestionamos el caso en el que n no es múltiplo de tamanho_desenrollo
-       for (int i = n_real; i < n; i++) x[i] = x_new[i];
+       for (int i = tamanho_bloque; i < n; i++) x[i] = x_new[i];
           
-       if (sqrt(norm2) < tol)
+       if (norm2 < tol * tol) // Comparamos con tol^2 para evitar la llamada a sqrt, lo que puede reducir el número de instrucciones
            return norm2;
    }
 
@@ -173,7 +176,7 @@ void generar_matriz(double **matriz)
    {
        double suma = 0.0;
        // Desenrollamos el lazo para realizar las operaciones de 5 en 5
-       for (int j = 0; j < n_real; j += tamanho_desenrollo)
+       for (int j = 0; j < tamanho_bloque; j += tamanho_desenrollo)
        {
            matriz[i][j] = ((double)rand() / RAND_MAX) * 100.0;
            suma += matriz[i][j];
@@ -197,7 +200,7 @@ void generar_matriz(double **matriz)
 
 
        // Gestionamos el caso en el que n no es múltiplo de tamanho_desenrollo
-       for (int j = n_real; j < n; j++)
+       for (int j = tamanho_bloque; j < n; j++)
        {
            matriz[i][j] = ((double)rand() / RAND_MAX) * 100.0;
            suma += matriz[i][j];
@@ -214,7 +217,7 @@ void generar_matriz(double **matriz)
 void generar_vector(double *vector)
 {
    // Modificamos para desenrollar el lazo de 5 en 5
-   for (int i = 0; i < n_real; i += tamanho_desenrollo)
+   for (int i = 0; i < tamanho_bloque; i += tamanho_desenrollo)
    {
        vector[i] = ((double)rand() / RAND_MAX) * 100.0;
        vector[i+1] = ((double)rand() / RAND_MAX) * 100.0;
@@ -224,11 +227,9 @@ void generar_vector(double *vector)
    }
   
    // Gestionamos el caso en el que n no es múltiplo de tamanho_desenrollo
-   for (int i = n_real; i < n; i++) vector[i] = ((double)rand() / RAND_MAX) * 100.0;
+   for (int i = tamanho_bloque; i < n; i++) vector[i] = ((double)rand() / RAND_MAX) * 100.0;
   
 }
-
-
 
 
 
