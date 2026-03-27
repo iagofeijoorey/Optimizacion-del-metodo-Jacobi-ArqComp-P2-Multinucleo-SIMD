@@ -2,105 +2,77 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-#include <string.h>
 
+#include <omp.h>
 
 #include "counter.h"
-
 
 #define tol 1e-5
 #define max_iter 15000
 #define TAM_LINEA_CACHE 64
-#define tamanho_desenrollo 5 // Desenrollamos los lazos de 5 en 5
-
 
 int n;
-int n_real;
 
+int c;
 
-double resolver_jacobi(double **a, double *b, double *x);
-void generar_matriz(double **matriz);
-void generar_vector(double *vector);
+double resolver_jacobi(double** a, double *b, double* x);
+void generar_matriz(double** matriz);
+void generar_vector(double* vector);
 
-
-
-
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-   int c = 1;
-   n_real = n - (n % tamanho_desenrollo); // Para gestionar el caso en el que n no es múltiplo de tamanho_desenrollo
+     c = 1;
+     
+    if (argc != 2 && argc != 3)
+    {
+        printf("Uso incorrecto: ./v3 n [c]\n");
+        exit(1);
+    }
 
+    n = atoi(argv[1]);
+    if (argc == 3) c = atoi(argv[2]);
 
-   if (argc != 2 && argc != 3)
-   {
-       printf("Uso incorrecto: %s n [c]\n", argv[0]);
-       exit(1);
-   }
+    if (c > 0)
+        omp_set_num_threads(c);
 
+    printf("v3: n=%d c=%d\n", n, omp_get_max_threads());
 
-   n = atoi(argv[1]);
-   if (argc == 3)
-       c = atoi(argv[2]);
+    /* Reserva de matriz alineada */
+    double **a = aligned_alloc(TAM_LINEA_CACHE, sizeof(double*) * n);
+    double *data = aligned_alloc(TAM_LINEA_CACHE, sizeof(double) * n * n);
 
+    for (int i = 0; i < n; i++)
+        a[i] = &data[i * n];
 
-   printf("%s: n=%d c=%d\n", argv[0], n, c);
+    /* Reserva de vectores */
+    double *b = aligned_alloc(TAM_LINEA_CACHE, sizeof(double) * n);
+    double *x = aligned_alloc(TAM_LINEA_CACHE, sizeof(double) * n);
 
+    /* Inicializar x */
+    for(int i = 0; i < n; i++)
+        x[i] = 0.0;
 
-   /* Reserva de matriz alineada */
-   double **a = aligned_alloc(TAM_LINEA_CACHE, sizeof(double *) * n);
-   double *data = aligned_alloc(TAM_LINEA_CACHE, sizeof(double) * n * n);
+    srand(time(NULL));
 
+    generar_matriz(a);
+    generar_vector(b);
 
-   // Desenrollamos el lazo (5 en 5)
-   for (int i = 0; i < n; i += tamanho_desenrollo)
-   {
-       a[i] = &data[i * n];
-       a[i+1] = &data[(i+1) * n];
-       a[i+2] = &data[(i+2) * n];
-       a[i+3] = &data[(i+3) * n];
-       a[i+4] = &data[(i+4) * n];
-   }
+    double ck;
 
+    start_counter();
+    double solucion = resolver_jacobi(a, b, x);
+    ck = get_counter();
 
-   /* Reserva de vectores */
-   double *b = aligned_alloc(TAM_LINEA_CACHE, sizeof(double) * n);
-   double *x = aligned_alloc(TAM_LINEA_CACHE, sizeof(double) * n);
+    printf("v3: solucion = %e\n", solucion);
+    printf("v3: counter = %lf\n", ck);
 
+    free(a);
+    free(data);
+    free(b);
+    free(x);
 
-   /* Inicializar x */
-   memset(x, 0, n * sizeof(double));
-
-
-   srand(time(NULL));
-
-
-   generar_matriz(a);
-   generar_vector(b);
-
-
-   double ck;
-
-
-   start_counter();
-   double solucion = resolver_jacobi(a, b, x);
-   ck = get_counter();
-
-
-   printf("%s: solucion = %e\n", argv[0], solucion);
-   printf("%s: counter = %lf\n", argv[0], ck);
-
-
-   free(a);
-   free(data);
-   free(b);
-   free(x);
-
-
-   return 0;
+    return 0;
 }
-
-
-
 
 double resolver_jacobi(double **a, double *b, double *x)
 {
@@ -110,41 +82,32 @@ double resolver_jacobi(double **a, double *b, double *x)
 
    for (int iter = 0; iter < max_iter; iter++)
    {
-       norm2 = 0;
+       norm2 = 0.0;
 
 
+       #pragma omp parallel for private(sigma) reduction(+:norm2) num_threads(c)
        for (int i = 0; i < n; i++)
        {
            sigma = 0.0;
 
 
-           // Desenrollamos el lazo (5 en 5)
-           for (int j = 0; j < n; j += tamanho_desenrollo)
+           for (int j = 0; j < n; j++)
            {
-               if (i != j) sigma += a[i][j] * x[j];
-               if (i != (j+1)) sigma += a[i][j+1] * x[j+1];
-               if (i != (j+2)) sigma += a[i][j+2] * x[j+2];
-               if (i != (j+3)) sigma += a[i][j+3] * x[j+3];
-               if (i != (j+4)) sigma += a[i][j+4] * x[j+4];
+               if (i != j)
+                   sigma += a[i][j] * x[j];
            }
 
 
            x_new[i] = (b[i] - sigma) / a[i][i];
            norm2 += pow(x_new[i] - x[i], 2);
        }
-      
-       /* copiar nuevo vector */
-       // Desenrollamos el lazo (5 en 5)
-       for (int i = 0; i < n; i += tamanho_desenrollo)
-       {
+
+
+       #pragma omp parallel for num_threads(c)
+       for (int i = 0; i < n; i++)
            x[i] = x_new[i];
-           x[i+1] = x_new[i+1];
-           x[i+2] = x_new[i+2];
-           x[i+3] = x_new[i+3];
-           x[i+4] = x_new[i+4];
-       }
-      
-       
+
+
        if (sqrt(norm2) < tol)
            return norm2;
    }
@@ -154,66 +117,25 @@ double resolver_jacobi(double **a, double *b, double *x)
 }
 
 
-
-
 /* Genera matriz diagonalmente dominante */
-void generar_matriz(double **matriz)
+void generar_matriz(double** matriz)
 {
-   for (int i = 0; i < n; i++)
-   {
-       double suma = 0.0;
-       // Desenrollamos el lazo para realizar las operaciones de 5 en 5
-       for (int j = 0; j < n; j += tamanho_desenrollo)
-       {
-           matriz[i][j] = ((double)rand() / RAND_MAX) * 100.0;
-           suma += matriz[i][j];
-
-
-           matriz[i][j+1] = ((double)rand() / RAND_MAX) * 100.0;
-           suma += matriz[i][j+1];
-
-
-           matriz[i][j+2] = ((double)rand() / RAND_MAX) * 100.0;
-           suma += matriz[i][j+2];
-
-
-           matriz[i][j+3] = ((double)rand() / RAND_MAX) * 100.0;
-           suma += matriz[i][j+3];
-
-
-           matriz[i][j+4] = ((double)rand() / RAND_MAX) * 100.0;
-           suma += matriz[i][j+4];
-       }
-
-
-       // Gestionamos el caso en el que n no es múltiplo de tamanho_desenrollo
-       
-       // La diagonal es la suma de toda la fila (garantiza dominancia estricta)
-       matriz[i][i] += suma;
-   }
+    for (int i = 0; i < n; i++)
+    {
+        double suma = 0.0;
+        for (int j = 0; j < n; j++)
+        {
+            matriz[i][j] = ((double) rand() / RAND_MAX) * 100.0;
+            suma += matriz[i][j];
+        }
+        // La diagonal es la suma de toda la fila (garantiza dominancia estricta)
+        matriz[i][i] += suma;
+    }
 }
-
-
-
 
 /* Genera vector aleatorio */
-void generar_vector(double *vector)
+void generar_vector(double* vector)
 {
-   // Modificamos para desenrollar el lazo de 5 en 5
-   for (int i = 0; i < n; i += tamanho_desenrollo)
-   {
-       vector[i] = ((double)rand() / RAND_MAX) * 100.0;
-       vector[i+1] = ((double)rand() / RAND_MAX) * 100.0;
-       vector[i+2] = ((double)rand() / RAND_MAX) * 100.0;
-       vector[i+3] = ((double)rand() / RAND_MAX) * 100.0;
-       vector[i+4] = ((double)rand() / RAND_MAX) * 100.0;
-   }
-  
+    for (int i = 0; i < n; i++)
+        vector[i] = ((double) rand() / RAND_MAX) * 100.0;
 }
-
-
-
-
-
-
-
