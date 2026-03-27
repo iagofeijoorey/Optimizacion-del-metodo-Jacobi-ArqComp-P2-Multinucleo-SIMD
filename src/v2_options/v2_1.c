@@ -97,7 +97,7 @@ double resolver_jacobi(double** a, double *b, double *x)
         for(int i = 0; i < n; i++)
             x[i] = x_new[i];
 
-        if (sqrt(norm2) < tol)
+        if (norm2 < tol * tol) // Comparamos con tol^2 para evitar la llamada a sqrt, lo que puede reducir el número de instrucciones
             return norm2;
     }
 

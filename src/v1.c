@@ -90,6 +90,9 @@ double resolver_jacobi(double** a, double *b, double *x)
             norm2 += pow(x_new[i] - x[i], 2);
         }
 
+        
+        printf("Norma %lf \n", sqrt(norm2));
+        
         /* copiar nuevo vector */
         for(int i = 0; i < n; i++)
             x[i] = x_new[i];
